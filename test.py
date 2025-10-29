@@ -2,7 +2,6 @@ import numpy as np
 import cv2 as cv
 import mediapipe as mp
 import time
-#from mediapipe.tasks.vision import ImageProcessingOptions
 
 
 BaseOptions = mp.tasks.BaseOptions
@@ -53,6 +52,30 @@ HAND_CONNECTIONS = {
     (17,18),(18,19),(19,20)
 }
 
+def fist_confidence(hand_landmarks, frame_shape):
+    h,w = frame_shape
+    fingertip_indices = [4,8,12,16,20]
+    hand_base_indices = [2,5,9,13,17]
+    
+    fingertips = [hand_landmarks[i] for i in fingertip_indices]
+    hand_base = [hand_landmarks[i] for i in hand_base_indices]
+
+    distance = 0
+    distances = 0
+    max_possible_distance = 0
+    for i in range(len(fingertip_indices)):
+        x_distance = fingertips[i].x *w - hand_base[i].x *w
+        y_distance = fingertips[i].y * h - hand_base[i].y * h
+        distance = np.sqrt(np.square(x_distance) + np.square(y_distance))
+        distances+=distance
+        palm_diagonal = np.sqrt(w**2 + h**2) * 0.08  # Rough estimate
+        max_possible_distance += palm_diagonal
+    
+    # Normalize to 0-1 range (lower distance = more closed fist)
+    fist_confidence = 1 - (distances / max_possible_distance)
+    print(fist_confidence)
+    return max(0, min(1, fist_confidence))  # Clamp to 0-1
+    
 with HandLandmarker.create_from_options(options) as landmarker:
     timestamp = 0
     while True:
@@ -91,7 +114,7 @@ with HandLandmarker.create_from_options(options) as landmarker:
 
         result = landmarker.detect_for_video(mp_image, timestamp)
         timestamp+=frame_interval_ms
-
+        
         if result.hand_landmarks:
             for hand in result.hand_landmarks:
                 for landmark_idx, landmark in enumerate(hand):
@@ -100,6 +123,11 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     y = int(landmark.y*h)
                     cv.circle(frame, (x,y), 2, (0,255,0), -1)
                     cv.putText(frame, str(landmark_idx), (x+5,y+5), cv.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255),1)
+
+                confidence = fist_confidence(hand, frame.shape[:2])
+                if(confidence > 0.4):
+                    cv.putText(frame, "Fist", (50,50), cv.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+
                 for connection in HAND_CONNECTIONS:
                     start_idx, end_idx = connection
                     start_landmark, end_landmark = hand[start_idx], hand[end_idx]
