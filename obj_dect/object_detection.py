@@ -17,7 +17,7 @@ options = ObjectDetectorOptions(
     running_mode = VisionRunningMode.VIDEO,
     score_threshold = 0.5
 )
-
+ 
 detector = vision.ObjectDetector.create_from_options(options)
 cap = cv.VideoCapture(0)
 
